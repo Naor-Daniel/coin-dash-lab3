@@ -1,7 +1,8 @@
 # Coin Dash — Lab 3 starter
 
-Collect coins, avoid drones, and survive a 45-second round. Move with arrow keys or WASD;
-press R to restart. This is deliberately small so you can add features during the lab.
+Collect coins and avoid drones across three levels of rising difficulty. Each level has a coin
+target and a time limit; reach the target to unlock the next level. Move with arrow keys or WASD;
+press R to retry a level and Enter to continue after passing one. This is deliberately small so you can add features during the lab.
 
 **Play it here:** https://www.avivz.net/coin-dash/
 
@@ -36,8 +37,8 @@ laptops' JSON files together and save the combined HTML. Use the same time windo
 - `.gitignore`: keeps generated reports out of Git.
 - `index.html`: page and script loading.
 - `style.css`: page appearance.
-- `settings.js`: round duration, speeds, colours and dimensions.
-- `game.js`: scene, input, collisions, score and end-of-round behaviour.
+- `settings.js`: per-level targets, time limits and drones, plus speeds, colours and dimensions.
+- `game.js`: scene, input, collisions, score, level progression and end-of-level behaviour.
 - `vendor/phaser-3.90.0.min.js`: the pinned Phaser runtime, byte for byte the file published at
   `https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js`; `vendor/LICENSE.phaser.txt` is its MIT licence.
 
