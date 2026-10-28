@@ -2,10 +2,13 @@
 window.COIN_DASH = {
   width: 800,
   height: 500,
-  roundSeconds: 45,
   playerSpeed: 240,
-  droneSpeed: 105,
-  droneCount: 3,
+  // Collect `targetCoins` before the clock runs out to unlock the next level.
+  levels: [
+    { targetCoins: 8, seconds: 30, droneCount: 2, droneSpeed: 90 },
+    { targetCoins: 12, seconds: 35, droneCount: 3, droneSpeed: 125 },
+    { targetCoins: 16, seconds: 40, droneCount: 5, droneSpeed: 160 }
+  ],
   colors: {
     background: 0x101c31, player: 0x71e8ce, coin: 0xffd166,
     drone: 0xff657a, droneDark: 0x5c1622, droneEye: 0xfff1a8

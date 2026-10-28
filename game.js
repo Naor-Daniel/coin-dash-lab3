@@ -43,13 +43,20 @@ const playCoinSound = (() => {
 class CoinDash extends Phaser.Scene {
   constructor() { super('CoinDash'); }
 
+  init(data) {
+    // Restarting the scene with { level } keeps progress; a fresh start begins at level 0.
+    this.level = data.level || 0;
+  }
+
   create() {
     const c = COIN_DASH;
+    this.settings = c.levels[this.level];
     this.score = 0;
     this.finished = false;
+    this.passed = false;
     this.isPaused = false;
     this.physics.resume();
-    this.deadline = this.time.now + c.roundSeconds * 1000;
+    this.deadline = this.time.now + this.settings.seconds * 1000;
     this.physics.world.setBounds(0, 44, c.width, c.height - 44);
     this.add.grid(c.width / 2, c.height / 2, c.width, c.height, 40, 40,
       c.colors.background, 1, 0x24334b, 0.45);
@@ -69,32 +76,55 @@ class CoinDash extends Phaser.Scene {
     this.coin.body.setCircle(9);
     this.placeCoin();
     this.drones = this.physics.add.group();
-    for (let i = 0; i < c.droneCount; i++) {
-      const drone = this.add.image(90 + i * 270, 100, 'drone');
+    const { droneCount, droneSpeed } = this.settings;
+    for (let i = 0; i < droneCount; i++) {
+      // Spread drones along the top row so none starts on top of the player.
+      const drone = this.add.image((i + 0.5) * c.width / droneCount, 100, 'drone');
       this.drones.add(drone);
       drone.body.setSize(26, 26).setCollideWorldBounds(true).setBounce(1, 1);
       // A restless wobble so the drones look like they are hovering.
       this.tweens.add({ targets: drone, angle: { from: -10, to: 10 }, duration: 260 + i * 40,
         yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       const angle = (35 + i * 105) * Math.PI / 180;
-      drone.body.setVelocity(Math.cos(angle) * c.droneSpeed, Math.sin(angle) * c.droneSpeed);
+      drone.body.setVelocity(Math.cos(angle) * droneSpeed, Math.sin(angle) * droneSpeed);
     }
     this.physics.add.overlap(this.player, this.coin, () => {
       if (this.finished) return;
       this.score++;
       playCoinSound();
-      this.placeCoin();
+      if (this.score >= this.settings.targetCoins) this.finish('Level complete!', true);
+      else this.placeCoin();
     });
     this.physics.add.overlap(this.player, this.drones, () => this.finish('A drone caught you!'));
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
-    this.input.keyboard.on('keydown-R', () => this.scene.restart());
+    // R retries the current level, or starts over from level 1 after beating the last one.
+    this.input.keyboard.on('keydown-R', () =>
+      this.scene.restart({ level: this.isLastLevel() && this.passed ? 0 : this.level }));
+    this.input.keyboard.on('keydown-ENTER', () => this.nextLevel());
+    this.input.keyboard.on('keydown-SPACE', () => this.nextLevel());
     this.input.keyboard.on('keydown-P', (event) => {
       if (!event.repeat) this.togglePause();
     });
     this.pauseButton = document.getElementById('pause-button');
     this.pauseButton.onclick = () => this.togglePause();
     this.updatePauseButton();
+    this.showBanner(`Level ${this.level + 1}\nCollect ${this.settings.targetCoins} coins`);
+  }
+
+  isLastLevel() { return this.level === COIN_DASH.levels.length - 1; }
+
+  nextLevel() {
+    // Only a passed level unlocks the next one.
+    if (this.passed && !this.isLastLevel()) this.scene.restart({ level: this.level + 1 });
+  }
+
+  showBanner(message) {
+    const c = COIN_DASH;
+    this.banner = this.add.text(c.width / 2, c.height / 2, message,
+      { font: '28px monospace', color: '#ffd166', align: 'center', lineSpacing: 10 }).setOrigin(0.5);
+    this.tweens.add({ targets: this.banner, alpha: 0, delay: 1200, duration: 600,
+      onComplete: () => this.banner.destroy() });
   }
 
   updatePauseButton() {
@@ -180,24 +210,34 @@ class CoinDash extends Phaser.Scene {
       this.player.rotation = Phaser.Math.Angle.RotateTo(this.player.rotation, Math.atan2(dy, dx), 0.35);
     }
     const seconds = Math.max(0, Math.ceil((this.deadline - this.time.now) / 1000));
-    const best = Math.max(this.score, this.registry.get('best') || 0);
-    this.hud.setText(`Coins: ${this.score}   Best: ${best}            Time: ${seconds}s`);
+    const best = Math.max(this.score, this.bestForLevel());
+    this.hud.setText(`Level ${this.level + 1}/${COIN_DASH.levels.length}   ` +
+      `Coins: ${this.score}/${this.settings.targetCoins}   Best: ${best}      Time: ${seconds}s`);
     if (seconds === 0) this.finish('Time is up!');
   }
 
-  finish(reason) {
+  bestForLevel() { return (this.registry.get('best') || {})[this.level] || 0; }
+
+  finish(reason, passed = false) {
     if (this.finished) return;
     this.finished = true;
+    this.passed = passed;
     this.physics.pause();
     this.tweens.pauseAll();
     this.updatePauseButton();
-    // The registry outlives scene restarts, so the best score lasts for the session.
-    const best = Math.max(this.score, this.registry.get('best') || 0);
-    this.registry.set('best', best);
+    // Don't leave the level banner on top of the end-of-level panel.
+    if (this.banner.active) this.banner.destroy();
+    // The registry outlives scene restarts, so each level's best score lasts for the session.
+    const best = Math.max(this.score, this.bestForLevel());
+    this.registry.set('best', { ...this.registry.get('best'), [this.level]: best });
+    let next = 'Press R to try this level again';
+    if (passed) next = this.isLastLevel()
+      ? 'You beat every level! Press R to play again'
+      : `Press Enter for level ${this.level + 2}`;
     const c = COIN_DASH;
-    this.add.rectangle(c.width / 2, c.height / 2, 520, 150, 0x0a1120, 0.95);
+    this.add.rectangle(c.width / 2, c.height / 2, 620, 150, 0x0a1120, 0.95);
     this.add.text(c.width / 2, c.height / 2,
-      `${reason}\n${this.score} coins collected (best: ${best})\nPress R to try again`,
+      `${reason}\n${this.score}/${this.settings.targetCoins} coins (best: ${best})\n${next}`,
       { font: '24px monospace', color: '#ffffff', align: 'center', lineSpacing: 12 }
     ).setOrigin(0.5);
   }
