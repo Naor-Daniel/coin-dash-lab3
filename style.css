@@ -5,3 +5,7 @@ header > p:first-child { color: #71e8ce; font-size: 12px; letter-spacing: .15em;
 h1 { margin: 0; font-size: 40px; }
 #game { border: 1px solid #34445e; border-radius: 12px; overflow: hidden; }
 canvas { display: block; }
+#pause-button { margin-top: 12px; padding: 8px 16px; border: 1px solid #71e8ce; border-radius: 8px; background: #162840; color: #e5edf7; font: inherit; cursor: pointer; }
+#pause-button:hover { background: #24405d; }
+#pause-button:focus-visible { outline: 3px solid #ffd166; outline-offset: 2px; }
+#pause-button:disabled { opacity: .55; cursor: not-allowed; }
