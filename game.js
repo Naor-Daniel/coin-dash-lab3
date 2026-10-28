@@ -1,4 +1,45 @@
 /* global Phaser, COIN_DASH */
+const playCoinSound = (() => {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  let context;
+
+  function unlockAudio() {
+    if (!AudioContextClass) return;
+    try {
+      if (!context) context = new AudioContextClass();
+      if (context.state !== 'running') context.resume().catch(() => {});
+    } catch {
+      // Sound is optional; keep the game playable if audio is unavailable.
+    }
+  }
+
+  // Browsers require a user gesture before Web Audio can play.
+  window.addEventListener('keydown', unlockAudio, true);
+  window.addEventListener('pointerdown', unlockAudio, true);
+
+  return () => {
+    if (!context || context.state !== 'running') return;
+    try {
+      const now = context.currentTime;
+      const note = context.createOscillator();
+      const volume = context.createGain();
+      note.type = 'sine';
+      note.frequency.setValueAtTime(660, now);
+      note.frequency.exponentialRampToValueAtTime(990, now + 0.12);
+      volume.gain.setValueAtTime(0.0001, now);
+      volume.gain.exponentialRampToValueAtTime(0.12, now + 0.01);
+      volume.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+      note.connect(volume);
+      volume.connect(context.destination);
+      note.onended = () => { note.disconnect(); volume.disconnect(); };
+      note.start(now);
+      note.stop(now + 0.18);
+    } catch {
+      // A failed audio device should never interrupt scoring.
+    }
+  };
+})();
+
 class CoinDash extends Phaser.Scene {
   constructor() { super('CoinDash'); }
 
@@ -36,6 +77,7 @@ class CoinDash extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.coin, () => {
       if (this.finished) return;
       this.score++;
+      playCoinSound();
       this.placeCoin();
     });
     this.physics.add.overlap(this.player, this.drones, () => this.finish('A drone caught you!'));
