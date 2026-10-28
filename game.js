@@ -59,18 +59,23 @@ class CoinDash extends Phaser.Scene {
       this.add.text(0, 0, 'Paused\nPress P to resume',
         { font: '24px monospace', color: '#ffffff', align: 'center', lineSpacing: 12 }).setOrigin(0.5)
     ]).setDepth(1).setVisible(false);
-    this.player = this.add.rectangle(c.width / 2, c.height / 2, 24, 24, c.colors.player);
+    this.makeTextures();
+    this.player = this.add.image(c.width / 2, c.height / 2, 'hero');
     this.physics.add.existing(this.player);
-    this.player.body.setCollideWorldBounds(true);
+    // Hitboxes keep the original sizes; only the art around them changed.
+    this.player.body.setSize(24, 24).setCollideWorldBounds(true);
     this.coin = this.add.circle(100, 100, 9, c.colors.coin);
     this.physics.add.existing(this.coin);
     this.coin.body.setCircle(9);
     this.placeCoin();
     this.drones = this.physics.add.group();
     for (let i = 0; i < c.droneCount; i++) {
-      const drone = this.add.rectangle(90 + i * 270, 100, 26, 26, c.colors.drone);
+      const drone = this.add.image(90 + i * 270, 100, 'drone');
       this.drones.add(drone);
-      drone.body.setCollideWorldBounds(true).setBounce(1, 1);
+      drone.body.setSize(26, 26).setCollideWorldBounds(true).setBounce(1, 1);
+      // A restless wobble so the drones look like they are hovering.
+      this.tweens.add({ targets: drone, angle: { from: -10, to: 10 }, duration: 260 + i * 40,
+        yoyo: true, repeat: -1, ease: 'Sine.easeInOut' });
       const angle = (35 + i * 105) * Math.PI / 180;
       drone.body.setVelocity(Math.cos(angle) * c.droneSpeed, Math.sin(angle) * c.droneSpeed);
     }
@@ -104,13 +109,50 @@ class CoinDash extends Phaser.Scene {
     if (this.isPaused) {
       this.deadline += this.time.now - this.pauseStartedAt;
       this.physics.resume();
+      this.tweens.resumeAll();
     } else {
       this.pauseStartedAt = this.time.now;
       this.physics.pause();
+      this.tweens.pauseAll();
     }
     this.isPaused = !this.isPaused;
     this.pauseOverlay.setVisible(this.isPaused);
     this.updatePauseButton();
+  }
+
+  makeTextures() {
+    // Textures survive scene restarts, so draw them only once.
+    if (this.textures.exists('hero')) return;
+    const col = COIN_DASH.colors;
+    const g = this.make.graphics({}, false);
+
+    // Hero, drawn facing right: rotating the image points it anywhere.
+    g.fillStyle(col.player).fillRoundedRect(6, 6, 24, 24, 7);
+    g.fillTriangle(29, 11, 36, 18, 29, 25);
+    g.fillStyle(0xffffff).fillCircle(23, 13, 4).fillCircle(23, 23, 4);
+    g.fillStyle(col.background).fillCircle(25, 13, 2).fillCircle(25, 23, 2);
+    g.generateTexture('hero', 36, 36);
+
+    // Drone: rotor arms, a spiked shell and an angry face.
+    g.clear();
+    g.lineStyle(4, col.droneDark).lineBetween(7, 7, 37, 37).lineBetween(37, 7, 7, 37);
+    for (const [x, y] of [[7, 7], [37, 7], [7, 37], [37, 37]]) {
+      g.fillStyle(col.droneDark).fillCircle(x, y, 6);
+      g.lineStyle(2, col.drone).strokeCircle(x, y, 6);
+    }
+    const spikes = [];
+    for (let i = 0; i < 16; i++) {
+      const r = i % 2 ? 11 : 16, a = i * Math.PI / 8;
+      spikes.push({ x: 22 + Math.cos(a) * r, y: 22 + Math.sin(a) * r });
+    }
+    g.fillStyle(col.drone).fillPoints(spikes, true);
+    g.fillStyle(col.droneEye).fillTriangle(13, 17, 21, 21, 14, 24).fillTriangle(31, 17, 23, 21, 30, 24);
+    g.fillStyle(col.droneDark).fillCircle(17, 21, 1.5).fillCircle(27, 21, 1.5);
+    g.lineStyle(2, col.droneDark).strokePoints(
+      [{ x: 16, y: 29 }, { x: 18, y: 27 }, { x: 20, y: 29 }, { x: 22, y: 27 },
+        { x: 24, y: 29 }, { x: 26, y: 27 }, { x: 28, y: 29 }]);
+    g.generateTexture('drone', 44, 44);
+    g.destroy();
   }
 
   placeCoin() {
@@ -133,6 +175,10 @@ class CoinDash extends Phaser.Scene {
       - Number(this.cursors.up.isDown || this.keys.W.isDown);
     const direction = new Phaser.Math.Vector2(dx, dy).normalize().scale(COIN_DASH.playerSpeed);
     this.player.body.setVelocity(direction.x, direction.y);
+    // Turn smoothly towards the movement direction; keep facing it when stopped.
+    if (dx || dy) {
+      this.player.rotation = Phaser.Math.Angle.RotateTo(this.player.rotation, Math.atan2(dy, dx), 0.35);
+    }
     const seconds = Math.max(0, Math.ceil((this.deadline - this.time.now) / 1000));
     const best = Math.max(this.score, this.registry.get('best') || 0);
     this.hud.setText(`Coins: ${this.score}   Best: ${best}            Time: ${seconds}s`);
@@ -143,6 +189,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.physics.pause();
+    this.tweens.pauseAll();
     this.updatePauseButton();
     // The registry outlives scene restarts, so the best score lasts for the session.
     const best = Math.max(this.score, this.registry.get('best') || 0);
