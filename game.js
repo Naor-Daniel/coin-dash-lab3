@@ -45,6 +45,16 @@ class CoinDash extends Phaser.Scene {
     this.input.keyboard.on('keydown-P', (event) => {
       if (!event.repeat) this.togglePause();
     });
+    this.pauseButton = document.getElementById('pause-button');
+    this.pauseButton.onclick = () => this.togglePause();
+    this.updatePauseButton();
+  }
+
+  updatePauseButton() {
+    this.pauseButton.textContent = this.isPaused ? 'Resume' : 'Pause';
+    this.pauseButton.setAttribute('aria-label', this.isPaused ? 'Resume game' : 'Pause game');
+    this.pauseButton.setAttribute('aria-pressed', String(this.isPaused));
+    this.pauseButton.disabled = this.finished;
   }
 
   togglePause() {
@@ -58,6 +68,7 @@ class CoinDash extends Phaser.Scene {
     }
     this.isPaused = !this.isPaused;
     this.pauseOverlay.setVisible(this.isPaused);
+    this.updatePauseButton();
   }
 
   placeCoin() {
@@ -90,6 +101,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.physics.pause();
+    this.updatePauseButton();
     // The registry outlives scene restarts, so the best score lasts for the session.
     const best = Math.max(this.score, this.registry.get('best') || 0);
     this.registry.set('best', best);
